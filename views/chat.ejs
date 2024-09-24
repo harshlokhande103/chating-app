@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+        }
+        .chat-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+        }
+        .chat-header {
+            background-color: #4267B2;
+            color: white;
+            padding: 15px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            text-align: center;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 18px;
+            max-width: 70%;
+        }
+        .message.sent {
+            background-color: #0084ff;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        .message.received {
+            background-color: #e4e6eb;
+            align-self: flex-start;
+        }
+        .chat-input {
+            display: flex;
+            padding: 15px;
+            background-color: #f0f2f5;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+        }
+        #messageInput {
+            flex-grow: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 20px;
+            font-size: 16px;
+        }
+        #sendButton {
+            background-color: #0084ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #waitingMessage {
+            text-align: center;
+            font-size: 18px;
+            margin-top: 20px;
+        }
+        #partnerName {
+            font-weight: bold;
+            color: #4267B2;
+        }
+        .message img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+        #imageUpload {
+            display: none;
+        }
+        #imageLabel {
+            cursor: pointer;
+            padding: 5px 10px;
+            background-color: #ddd;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>Chat Room</h2>
+            <div id="partnerName"></div>
+        </div>
+        <div id="waitingMessage" style="display: none;">Waiting for a partner to join...</div>
+        <div class="chat-messages" id="messages"></div>
+        <div class="chat-input">
+            <label for="imageUpload" id="imageLabel">📷</label>
+            <input type="file" id="imageUpload" accept="image/*">
+            <input type="text" id="messageInput" placeholder="Type a message..." disabled>
+            <button id="sendButton" disabled>Send</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const messages = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const waitingMessage = document.getElementById('waitingMessage');
+        const partnerName = document.getElementById('partnerName');
+        const imageUpload = document.getElementById('imageUpload');
+
+        const username = localStorage.getItem('userName');
+
+        socket.emit('user login', username);
+
+        function addMessage(msg, isSent) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add(isSent ? 'sent' : 'received');
+            
+            if (msg.type === 'text') {
+                messageElement.textContent = msg.content;
+            } else if (msg.type === 'image') {
+                const img = document.createElement('img');
+                img.src = msg.content;
+                messageElement.appendChild(img);
+            }
+            
+            messages.appendChild(messageElement);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function sendMessage() {
+            if (messageInput.value) {
+                const message = { type: 'text', content: `${username}: ${messageInput.value}` };
+                socket.emit('chat message', message);
+                addMessage(message, true);
+                messageInput.value = '';
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        imageUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('image', file);
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    const message = { type: 'image', content: result.filePath };
+                    socket.emit('image message', message);
+                    addMessage(message, true);
+                }
+            }
+        });
+
+        socket.on('waiting', () => {
+            waitingMessage.style.display = 'block';
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+        });
+
+        socket.on('chat start', (partnerUsername) => {
+            waitingMessage.style.display = 'none';
+            partnerName.textContent = `Chatting with: ${partnerUsername}`;
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            addMessage({ type: 'text', content: `You are now connected with ${partnerUsername}` }, false);
+        });
+
+        socket.on('chat message', (msg) => {
+            addMessage(msg, false);
+        });
+
+        socket.on('image message', (msg) => {
+            addMessage(msg, false);
+        });
+
+        socket.on('user disconnected', () => {
+            addMessage({ type: 'text', content: 'Your chat partner has disconnected.' }, false);
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+        });
+    </script>
+</body>
+</html>

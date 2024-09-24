@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Chat App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .login-container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        h1 {
+            text-align: center;
+            color: #1877f2;
+        }
+        input {
+            display: block;
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 0.5rem;
+            background-color: #1877f2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+        button:hover {
+            background-color: #166fe5;
+        }
+        #otpSection {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Chat App Login</h1>
+        <form id="loginForm">
+            <input type="text" id="username" placeholder="Enter your username" required>
+            <input type="tel" id="phoneNumber" placeholder="Enter your phone number" required>
+            <button type="button" id="sendOTP">Send OTP</button>
+            <div id="otpSection">
+                <input type="text" id="otp" placeholder="Enter OTP" required>
+                <button type="submit">Verify & Login</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const phoneNumberInput = document.getElementById('phoneNumber');
+        const sendOTPButton = document.getElementById('sendOTP');
+        const otpSection = document.getElementById('otpSection');
+        const otpInput = document.getElementById('otp');
+
+        sendOTPButton.addEventListener('click', async () => {
+            const phoneNumber = phoneNumberInput.value.trim();
+            if (phoneNumber) {
+                const response = await fetch('/generate-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phoneNumber }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    otpSection.style.display = 'block';
+                    sendOTPButton.disabled = true;
+                }
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            const phoneNumber = phoneNumberInput.value.trim();
+            const otp = otpInput.value.trim();
+            
+            if (username && phoneNumber && otp) {
+                const response = await fetch('/verify-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phoneNumber, otp }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    localStorage.setItem('userName', username);
+                    window.location.href = '/chat';
+                } else {
+                    alert('Invalid OTP. Please try again.');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
